@@ -18,7 +18,9 @@ public class BankSmsFilter {
 
     // Standard TRAI Indian Institutional Sender pattern (e.g. VK-HDFCBK, AX-SBIINB, BZ-ICICIB, VM-AXISBK, or HDFCBK)
     private static final Pattern INSTITUTIONAL_SENDER_PATTERN = Pattern.compile(
-        "^(?:[A-Za-z]{2}-)?([A-Za-z0-9]{3,9})$"
+        // TRAI now appends a category suffix (-S service, -T transactional, -G government,
+        // -P promotional), e.g. AX-KOTAKB-S. Accept S/T/G; promotional (-P) stays rejected.
+        "^(?:[A-Za-z]{2}-)?([A-Za-z0-9]{3,9})(?:-[STGstg])?$"
     );
 
     // Pure numeric sender pattern (mobile phone numbers, international prefixes)

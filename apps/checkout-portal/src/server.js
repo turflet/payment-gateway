@@ -230,7 +230,8 @@ export class CheckoutServer {
     const counterInstructions = state?.branding?.counterInstructions || 'Please visit the billing counter and present this screen to the cashier.';
     const footerGuarantee = state?.branding?.footerGuarantee || (process.env.DEFAULT_FOOTER_GUARANTEE || '').trim() || `Secured by ${appName} & 256-Bit Bank Encryption`;
     const trustBadgeText = state?.branding?.trustBadgeText || (process.env.DEFAULT_TRUST_BADGE_TEXT || '').trim() || `${appName} Verified Business`;
-    const vpa = state?.payeeVpa || state?.vpa || 'merchant@upi';
+    // No placeholder VPA: showing a guessed UPI ID invites payment to a stranger.
+    const vpa = state?.payeeVpa || state?.vpa || '';
 
     // In production and localhost, use relative '' so browser requests hit the checkout portal /api proxy
     // This avoids cross-origin blocking, CORS errors, and tunnel DNS resolution issues.
@@ -513,7 +514,19 @@ export class CheckoutServer {
       if (qrMatch) {
         const paymentId = qrMatch[1];
         const state = await this.fetchPaymentState(paymentId);
-        const upiUri = state?.upiUri || `upi://pay?pa=${encodeURIComponent(state?.payeeVpa || 'merchant@upi')}&pn=${encodeURIComponent(state?.merchantName || 'Store')}&am=${encodeURIComponent(state?.amount || '100.00')}&tn=${encodeURIComponent(paymentId)}`;
+        // Never fall back to a placeholder payee or amount: a guessed QR sends real
+        // money to whoever owns that VPA. Without a server-built upiUri, serve no QR.
+        const upiUri = typeof state?.upiUri === 'string' && state.upiUri.startsWith('upi://pay?') ? state.upiUri : null;
+        if (!upiUri) {
+          res.writeHead(503, {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'Access-Control-Allow-Origin': '*',
+            ...BASE_SECURITY_HEADERS
+          });
+          res.end('QR unavailable: payment details could not be loaded.');
+          return;
+        }
 
         const svg = generateQrSvg(upiUri, 220);
         res.writeHead(200, {

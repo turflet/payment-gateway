@@ -162,6 +162,23 @@
       }
     }
 
+    // Dev-only: when the API returns devOtp (YOUPI_EXPOSE_DEV_OTP=true, non-production),
+    // auto-fill the OTP field and show the code so testing works without WhatsApp.
+    let lastReceivedDevOtp = null;
+    function applyDevOtp(code) {
+      if (!code) return;
+      lastReceivedDevOtp = code;
+      console.info('[YOUPI dev] OTP:', code);
+      setTimeout(() => {
+        const input = document.getElementById('authOtpInput');
+        if (input) {
+          input.value = code;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        showOptionToast('Test mode OTP: ' + code + ' (auto-filled)');
+      }, 400);
+    }
+
     // Toast helper
     let toastTimer = null;
     function showOptionToast(msg) {
@@ -634,7 +651,7 @@
             })
           });
           const sendData = await sendRes.json();
-          if (sendData && sendData.devOtp) lastReceivedDevOtp = sendData.devOtp;
+          if (sendData && sendData.devOtp) applyDevOtp(sendData.devOtp);
 
           const greetingEl = document.getElementById('authOtpGreeting');
           if (greetingEl) {
@@ -659,7 +676,7 @@
             })
           });
           const sendData = await sendRes.json();
-          if (sendData && sendData.devOtp) lastReceivedDevOtp = sendData.devOtp;
+          if (sendData && sendData.devOtp) applyDevOtp(sendData.devOtp);
 
           const greetingEl = document.getElementById('authOtpGreeting');
           if (greetingEl) {
@@ -718,7 +735,7 @@
           })
         });
         const data = await res.json();
-        if (data && data.devOtp) lastReceivedDevOtp = data.devOtp;
+        if (data && data.devOtp) applyDevOtp(data.devOtp);
 
         if (res.ok) {
           const greetingEl = document.getElementById('authOtpGreeting');
@@ -879,7 +896,7 @@
           })
         });
         const data = await res.json();
-        if (data && data.devOtp) lastReceivedDevOtp = data.devOtp;
+        if (data && data.devOtp) applyDevOtp(data.devOtp);
 
         if (!res.ok) {
           showOptionToast(data.error || 'Failed to send WhatsApp OTP.');
@@ -2473,9 +2490,11 @@
         const sanitized = sanitizeUpiUri(state.upiUri);
         if (sanitized) return sanitized;
       }
-      const vpa = encodeURIComponent(String(state?.payeeVpa || state?.vpa || 'merchant@upi').trim());
+      // Never guess a payee or amount: without both, open no UPI app.
+      if (!(state?.payeeVpa || state?.vpa) || !state?.amount) return null;
+      const vpa = encodeURIComponent(String(state.payeeVpa || state.vpa).trim());
       const name = encodeURIComponent(String(state?.merchantName || 'Store').trim());
-      const amt = encodeURIComponent(String(state?.amount || '10.00').trim());
+      const amt = encodeURIComponent(String(state.amount).trim());
       const tid = encodeURIComponent(String(PAYMENT_ID || '').trim());
       return sanitizeUpiUri(`upi://pay?pa=${vpa}&pn=${name}&am=${amt}&tn=${tid}`);
     }
