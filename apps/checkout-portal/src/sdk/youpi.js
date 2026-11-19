@@ -1,6 +1,7 @@
 /**
  * YOUPI PG V2 — Universal One-Script Integration SDK
  *
+ * 
  * Official Distributable Browser Script (youpi.js / youpi-checkout.js)
  * Provides zero-JavaScript button configuration [data-youpi-pay] and programmatic Youpi.pay({...})
  * Launches the responsive iframe checkout modal with background blur.
