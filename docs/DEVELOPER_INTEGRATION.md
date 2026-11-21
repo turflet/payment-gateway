@@ -91,6 +91,27 @@ Youpi.pay({
 
 ---
 
+### Server-created payments for signed-in customers (skip the OTP step)
+
+When your own app already knows who is paying (the customer is signed in), create the payment from your
+server with `customerVerified: true` and the customer's phone number. The checkout then opens straight on the
+payment screen instead of asking for the mobile number and WhatsApp OTP.
+
+```bash
+curl -X POST https://<payment-api-host>/api/v1/payments \
+  -H "Content-Type: application/json" \
+  -H "X-Merchant-Id: <merchant id>" \
+  -H "X-Merchant-Key: <secret merchant API key>" \
+  -d '{"orderId":"ORDER-1001","amount":"499.00","customerVerified":true,
+       "customer":{"name":"Riya","phoneNumber":"9876543210","email":"riya@example.com"}}'
+```
+
+- Only a server call can set it: creating a payment requires `X-Merchant-Key`.
+- `customer.phoneNumber` is required. The checkout shows the customer masked (`******3210`).
+- Without the flag, the checkout keeps the normal mobile + OTP verification.
+
+---
+
 ## 4. Frontend Browser Payment Events
 
 The script emits standard DOM `CustomEvent`s on `window`:
