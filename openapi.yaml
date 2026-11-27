@@ -169,6 +169,15 @@ components:
             phoneNumber:
               type: string
               example: "9876543210"
+        customerVerified:
+          type: boolean
+          default: false
+          description: |
+            Set to true when your server has already verified this customer (for example they are signed in
+            to your app). Requires customer.phoneNumber. The checkout then skips the WhatsApp OTP step and
+            starts the payment window as soon as it opens, showing the customer only in masked form.
+            Only server-side calls can set it, because creating a payment needs X-Merchant-Key.
+          example: true
         description:
           type: string
           example: "Order Payment #1001"

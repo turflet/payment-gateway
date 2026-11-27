@@ -311,6 +311,48 @@ export function registerPaymentRoutes(server, ctx) {
       }
     }
 
+    // Merchant-verified customer: the merchant's own server (this request already proved it holds the
+    // secret merchant API key) vouches that it verified this customer, e.g. they are signed in to the
+    // merchant's app. The checkout then skips the WhatsApp OTP step for this session only.
+    // A browser can never set this: every request reaching this point proved the server-side merchant
+    // key (or the gateway admin token) above.
+    const merchantVerifiedCustomer = body.customerVerified === true;
+    if (merchantVerifiedCustomer) {
+      const verifiedMobile = body.customer?.mobileNumber || body.customer?.phoneNumber;
+      if (!verifiedMobile || !ctx.customerRepo) {
+        HttpServer.json(res, 400, {
+          error: 'customerVerified requires customer.phoneNumber.',
+          code: 'CUSTOMER_PHONE_REQUIRED'
+        });
+        return;
+      }
+      let verifiedCustomer = ctx.customerRepo.findByMobile(verifiedMobile);
+      if (!verifiedCustomer) {
+        try {
+          const email = body.customer?.email && !ctx.customerRepo.findByIdentifier(body.customer.email)
+            ? body.customer.email
+            : undefined;
+          verifiedCustomer = ctx.customerRepo.create({
+            name: body.customer?.name || body.customer?.fullName || 'Customer',
+            mobileNumber: verifiedMobile,
+            email,
+            isPhoneVerified: true
+          });
+        } catch (err) {
+          HttpServer.json(res, 400, { error: err.message, code: 'INVALID_CUSTOMER' });
+          return;
+        }
+      }
+      if (body.customerId && body.customerId !== verifiedCustomer.id) {
+        HttpServer.json(res, 400, {
+          error: 'customerId does not match customer.phoneNumber.',
+          code: 'CUSTOMER_MISMATCH'
+        });
+        return;
+      }
+      customerId = verifiedCustomer.id;
+    }
+
     // Server-side Ban Enforcement (Section 3)
     if (customerId && ctx.customerRepo && ctx.customerRepo.isBanned(customerId)) {
       HttpServer.json(res, 403, {
@@ -352,9 +394,12 @@ export function registerPaymentRoutes(server, ctx) {
     const shouldActivateNow = isCounterPayment || isExplicitTestAutoActivate;
     const initialStatus = isCounterPayment ? PaymentStatus.ACTIVE : PaymentStatus.INITIATED;
 
+    // merchantVerifiedCustomer is set only from body.customerVerified, never copied from merchant metadata
+    const { merchantVerifiedCustomer: _ignoredFlag, ...merchantMetadata } = body.metadata || {};
     const sessionMetadata = {
-      ...(body.metadata || {}),
-      ...(receivingAccountSnapshot ? { receivingAccountSnapshot } : {})
+      ...merchantMetadata,
+      ...(receivingAccountSnapshot ? { receivingAccountSnapshot } : {}),
+      ...(merchantVerifiedCustomer ? { merchantVerifiedCustomer: true } : {})
     };
 
     if (deviceId && customerId && ctx.deviceRepo) {

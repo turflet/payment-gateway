@@ -2197,6 +2197,35 @@
         };
       }
 
+      // 3a. Merchant-verified customer: the merchant's server already verified who is paying, so skip
+      // the mobile/OTP step and start the payment window straight away.
+      // Tried once per page load: if it can't start (e.g. another active payment), the normal
+      // verification flow below takes over instead of retrying in a loop.
+      if (data.merchantVerifiedCustomer && data.status === 'INITIATED' && !window.verifiedStartAttempted) {
+        window.verifiedStartAttempted = true;
+        // this render function is synchronous, so the async start runs in its own task
+        (async () => {
+          try {
+            if (!DeviceIdentity.deviceId || !DeviceIdentity.deviceToken) {
+              await DeviceIdentity.getOrRegister();
+            }
+            const startRes = await fetch(`${API_BASE}/api/v1/checkout/${PAYMENT_ID}/start`, {
+              method: 'POST',
+              headers: getApiHeaders({ 'Content-Type': 'application/json' }),
+              body: JSON.stringify({})
+            });
+            if (!startRes.ok) {
+              const err = await startRes.json().catch(() => ({}));
+              showOptionToast(err.message || err.error || 'Could not start the payment. Please try again.');
+            }
+          } catch (e) {
+            showOptionToast('Network error starting the payment.');
+          }
+          loadState();
+        })();
+        return;
+      }
+
       // 3. Pre-Gateway Customer Authentication Gate (Preserves identity up to 1 week)
       const preserved = getPreservedIdentity();
       if (preserved && preserved.token && !activeToken) {

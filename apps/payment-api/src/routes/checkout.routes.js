@@ -169,6 +169,30 @@ function sanitizePublicBranding(raw = {}) {
  * The gate is always on outside tests. Tests opt in with YOUPI_ENFORCE_OBSERVER_HEALTH=true.
  * Recovery: the next create succeeds once a heartbeat is fresh. In-flight sessions are not cancelled.
  */
+function maskMobile(mobile) {
+  const digits = String(mobile || '').replace(/\D/g, '');
+  return digits.length >= 4 ? `******${digits.slice(-4)}` : '';
+}
+
+function maskEmail(email) {
+  const [user, domain] = String(email || '').split('@');
+  if (!user || !domain || domain.endsWith('customer.youpi.local')) return '';
+  return `${user[0]}***@${domain}`;
+}
+
+/** Customer fields safe to show to whoever holds the checkout link. */
+export function maskedCustomerView(c) {
+  return {
+    id: c.id,
+    name: c.name,
+    fullName: c.name,
+    email: maskEmail(c.email),
+    mobileNumber: maskMobile(c.mobileNumber),
+    phoneNumber: maskMobile(c.mobileNumber),
+    masked: true
+  };
+}
+
 export function observerHealthEnforced() {
   if (process.env.YOUPI_ENFORCE_OBSERVER_HEALTH === 'true') return true;
   if (process.env.NODE_ENV === 'test') return false;
@@ -613,6 +637,14 @@ export function registerCheckoutRoutes(server, ctx) {
       };
     }
 
+    // A merchant-verified session (see POST /api/v1/payments customerVerified) shows its customer
+    // without the OTP step, but only masked: the payment id alone must not reveal contact details.
+    const merchantVerifiedCustomer = Boolean(session.metadata?.merchantVerifiedCustomer && session.customerId);
+    if (!customer && merchantVerifiedCustomer && ctx.customerRepo) {
+      const c = ctx.customerRepo.findById(session.customerId);
+      if (c) customer = maskedCustomerView(c);
+    }
+
     // Merchant metadata is merchant-private: only the owner (or the internal renderer)
     // may read it. The cancellation reason is exposed separately for the customer UI.
     const publicMetadata = isOwnerCaller ? (session.metadata || {}) : {};
@@ -694,6 +726,7 @@ export function registerCheckoutRoutes(server, ctx) {
       sellingMode,
       enabledMethods,
       customer,
+      merchantVerifiedCustomer,
       hasActiveSessionConflict,
       conflictingSession,
       queuePosition: session.queuePosition || 0,
@@ -776,6 +809,23 @@ export function registerCheckoutRoutes(server, ctx) {
       return;
     }
 
+    const customerView = {
+      id: customer.id,
+      name: customer.name,
+      email: customer.email,
+      mobileNumber: customer.mobileNumber,
+      fullName: customer.name,
+      phoneNumber: customer.mobileNumber
+    };
+    await activateForCustomer(req, res, session, customer, body, 'CUSTOMER', customerView);
+  });
+
+  /**
+   * Binds `customer` to `session` and, when no other active session conflicts, activates it
+   * (acquires the UPI slot and starts the 5-minute timer). Shared by the OTP-verified
+   * bind-customer route and the merchant-verified start route; writes the HTTP response.
+   */
+  async function activateForCustomer(req, res, session, customer, body, actorType, customerView) {
     // Device-level session binding validation
     const deviceAccess = checkSessionDeviceAccess(session, req, body, ctx);
     if (!deviceAccess.allowed) {
@@ -795,12 +845,12 @@ export function registerCheckoutRoutes(server, ctx) {
 
     // Check for active customer session conflict
     const otherActive = ctx.sessionRepo.findActiveForCustomer
-      ? ctx.sessionRepo.findActiveForCustomer(customer.id, params.id)
+      ? ctx.sessionRepo.findActiveForCustomer(customer.id, session.id)
       : null;
 
     let hasActiveSessionConflict = false;
     let conflictingSession = null;
-    if (otherActive && otherActive.id !== params.id) {
+    if (otherActive && otherActive.id !== session.id) {
       hasActiveSessionConflict = true;
       conflictingSession = {
         id: otherActive.id,
@@ -821,14 +871,7 @@ export function registerCheckoutRoutes(server, ctx) {
         expiresAt: session.expiresAt,
         hasActiveSessionConflict,
         conflictingSession,
-        customer: {
-          id: customer.id,
-          name: customer.name,
-          email: customer.email,
-          mobileNumber: customer.mobileNumber,
-          fullName: customer.name,
-          phoneNumber: customer.mobileNumber
-        }
+        customer: customerView
       });
       return;
     }
@@ -838,16 +881,16 @@ export function registerCheckoutRoutes(server, ctx) {
       UPDATE payment_sessions
       SET customer_id = ?, updated_at = ?
       WHERE id = ?
-    `, [customer.id, new Date().toISOString(), params.id]);
+    `, [customer.id, new Date().toISOString(), session.id]);
 
     // INVARIANT: Single Active Payment Session per Customer
-    if (otherActive && otherActive.id !== params.id) {
+    if (otherActive && otherActive.id !== session.id) {
       const requestingDeviceId = req.headers['x-device-id'] || body?.deviceId || null;
       if (otherActive.deviceId && (!requestingDeviceId || requestingDeviceId !== otherActive.deviceId)) {
         // CASE 3: Active session on another device -> DUPLICATE_SESSION_DETECTED
         HttpServer.json(res, 409, {
           error: 'DUPLICATE_SESSION_DETECTED',
-          session_id: params.id,
+          session_id: session.id,
           conflicting_session_id: otherActive.id,
           action: 'END_SESSION_AND_CREATE_NEW',
           message: 'This customer already has an active payment session on another device. For security reasons, this session cannot be continued from this device.',
@@ -894,8 +937,8 @@ export function registerCheckoutRoutes(server, ctx) {
         merchantId: session.merchantId,
         entityType: 'PAYMENT_SESSION',
         entityId: session.id,
-        action: 'CUSTOMER_AUTHENTICATED_AND_BOUND',
-        actorType: 'CUSTOMER',
+        action: actorType === 'MERCHANT' ? 'MERCHANT_VERIFIED_CUSTOMER_BOUND' : 'CUSTOMER_AUTHENTICATED_AND_BOUND',
+        actorType,
         actorId: customer.id,
         details: { email: customer.email, mobileNumber: customer.mobileNumber, sessionStatus: queueResult.status, hasActiveSessionConflict }
       });
@@ -908,15 +951,38 @@ export function registerCheckoutRoutes(server, ctx) {
       expiresAt: queueResult.expiresAt,
       hasActiveSessionConflict,
       conflictingSession,
-      customer: {
-        id: customer.id,
-        name: customer.name,
-        email: customer.email,
-        mobileNumber: customer.mobileNumber,
-        fullName: customer.name,
-        phoneNumber: customer.mobileNumber
-      }
+      customer: customerView
     });
+  }
+
+  // POST /api/v1/checkout/:id/start
+  // Starts a session whose customer the merchant's server already verified (created with
+  // customerVerified: true), so the checkout needs no WhatsApp OTP. Any other session still has to
+  // go through bind-customer with a customer token.
+  server.post('/api/v1/checkout/:id/start', async (req, res, params) => {
+    const body = await HttpServer.parseBody(req);
+    const session = ctx.sessionRepo.findById(params.id);
+    if (!session) {
+      HttpServer.json(res, 404, { error: `Payment session not found: ${params.id}` });
+      return;
+    }
+    if (!session.metadata?.merchantVerifiedCustomer || !session.customerId || !ctx.customerRepo) {
+      HttpServer.json(res, 403, {
+        error: 'This payment needs the customer to verify their mobile number first.',
+        code: 'CUSTOMER_SESSION_REQUIRED'
+      });
+      return;
+    }
+    const customer = ctx.customerRepo.findById(session.customerId);
+    if (!customer) {
+      HttpServer.json(res, 404, { error: 'Customer not found for this payment session.' });
+      return;
+    }
+    if (ctx.customerRepo.isBanned(customer.id)) {
+      HttpServer.json(res, 403, { status: 'BLOCKED', isBanned: true, error: 'ACCESS BLOCKED' });
+      return;
+    }
+    await activateForCustomer(req, res, session, customer, body, 'MERCHANT', maskedCustomerView(customer));
   });
 
   // POST /api/v1/checkout/:id/retry-new-payment - Cancels previous abandoned active session and activates new payment
