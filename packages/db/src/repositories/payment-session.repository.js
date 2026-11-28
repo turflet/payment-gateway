@@ -87,7 +87,7 @@ export class PaymentSessionRepository {
    * If slot is free, session transitions to ACTIVE with 5:00 window.
    * If slot is occupied, session transitions to QUEUED with sequence position.
    */
-  acquireSlotAtomic(sessionId, receivingAccountId, durationMs = 300000) {
+  acquireSlotAtomic(sessionId, receivingAccountId, durationMs = 600000) {
     if (!receivingAccountId) {
       throw new Error('receivingAccountId is mandatory for acquiring an active payment slot');
     }

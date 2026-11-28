@@ -16,7 +16,7 @@ export class TimingEngine {
     this.queueEngine = options.queueEngine;
     this.eventEmitter = options.eventEmitter || { emit: () => {} };
     this.auditRepo = options.auditRepo;
-    this.activeDurationMs = options.activeDurationMs || 300000; // 5 minutes
+    this.activeDurationMs = options.activeDurationMs || 600000; // 10 minutes
     this.processingDurationMs = options.processingDurationMs || 30000; // 30 seconds
 
     /** @type {Map<string, NodeJS.Timeout>} */

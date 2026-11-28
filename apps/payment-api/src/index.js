@@ -87,7 +87,7 @@ export function createPaymentApp(customDb = null, options = {}) {
     }
     return Math.floor(value);
   };
-  const activeDurationMs = parseWindowMs(process.env.PAYMENT_ACTIVE_WINDOW_MS, 300000, 'PAYMENT_ACTIVE_WINDOW_MS');
+  const activeDurationMs = parseWindowMs(process.env.PAYMENT_ACTIVE_WINDOW_MS, 600000, 'PAYMENT_ACTIVE_WINDOW_MS');
   const processingDurationMs = parseWindowMs(process.env.PAYMENT_PROCESSING_WINDOW_MS, 30000, 'PAYMENT_PROCESSING_WINDOW_MS');
 
   const queueEngine = new QueueEngine({

@@ -114,8 +114,15 @@ export function serializeForScript(value) {
     .replace(/\u2029/g, '\\u2029');
 }
 
+// Payment window shown by the checkout countdown. Same setting the payment API
+// uses for the slot (PAYMENT_ACTIVE_WINDOW_MS), default 10 minutes.
+export function payWindowSeconds(raw = process.env.PAYMENT_ACTIVE_WINDOW_MS) {
+  const ms = Number(raw);
+  return Number.isFinite(ms) && ms > 0 ? Math.ceil(ms / 1000) : 600;
+}
+
 // Placeholders that land inside a <script> block rather than HTML markup.
-const SCRIPT_PLACEHOLDERS = new Set(['PAYMENT_ID', 'API_BASE_URL', 'AMOUNT']);
+const SCRIPT_PLACEHOLDERS = new Set(['PAYMENT_ID', 'API_BASE_URL', 'AMOUNT', 'PAY_WINDOW_SECONDS']);
 
 /**
  * Replaces {{PLACEHOLDER}} tokens in the checkout template.
@@ -271,6 +278,7 @@ export class CheckoutServer {
       MERCHANT_NAME: merchantName,
       ORDER_ID: orderId,
       AMOUNT: state?.amount || '0.00',
+      PAY_WINDOW_SECONDS: String(payWindowSeconds()),
       VPA: vpa,
       LOGO_URL: logoUrl,
       SIDEBAR_NOTICE: sidebarNotice,

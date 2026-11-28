@@ -915,7 +915,7 @@ export function registerCheckoutRoutes(server, ctx) {
     let queueResult = { status: session.status, queuePosition: session.queuePosition, expiresAt: session.expiresAt };
     const targetAccountId = session.receivingAccountId || ctx.accountRepo?.findActiveForMerchant(session.merchantId)?.id || session.metadata?.receivingAccountSnapshot?.id;
     if (!hasActiveSessionConflict && session.status === PaymentStatus.INITIATED && targetAccountId) {
-      queueResult = ctx.queueEngine.enqueueOrActivate(session.id, targetAccountId, ctx.timingEngine?.activeDurationMs || 300000);
+      queueResult = ctx.queueEngine.enqueueOrActivate(session.id, targetAccountId, ctx.timingEngine?.activeDurationMs || 600000);
       if (queueResult.expiresAt) {
         ctx.timingEngine.startActiveTimer(session.id, queueResult.expiresAt);
       }
@@ -1073,7 +1073,7 @@ export function registerCheckoutRoutes(server, ctx) {
     // Now activate current session immediately on the newly freed slot
     let queueResult = { status: session.status, queuePosition: session.queuePosition, expiresAt: session.expiresAt };
     if (targetAccountId) {
-      queueResult = ctx.queueEngine.enqueueOrActivate(session.id, targetAccountId, ctx.timingEngine?.activeDurationMs || 300000);
+      queueResult = ctx.queueEngine.enqueueOrActivate(session.id, targetAccountId, ctx.timingEngine?.activeDurationMs || 600000);
       if (queueResult.expiresAt) {
         ctx.timingEngine.startActiveTimer(session.id, queueResult.expiresAt);
       }
@@ -1359,8 +1359,9 @@ export function registerCheckoutRoutes(server, ctx) {
 
       if (isCod) {
         // In Online Selling Mode, if Cash on Delivery is selected:
-        // Run a parallel standalone timer of 5 minutes (300 seconds) which is NOT part of the queue.
-        newExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+        // Run a parallel standalone timer (same length as the UPI payment window) which is NOT part of the queue.
+        const codWindowMs = ctx.timingEngine?.activeDurationMs || 600000;
+        newExpiresAt = new Date(Date.now() + codWindowMs);
         updates += `, receiving_account_id = NULL, status = 'ACTIVE', queue_position = 0, expires_at = ?`;
         updateParams.push(newExpiresAt.toISOString());
         session.receivingAccountId = null;
@@ -1368,11 +1369,11 @@ export function registerCheckoutRoutes(server, ctx) {
         session.queuePosition = 0;
         session.expiresAt = newExpiresAt;
 
-        // Start parallel 5-minute timer in timingEngine
+        // Start the parallel COD timer in timingEngine
         if (ctx.timingEngine) {
           ctx.timingEngine.startActiveTimer(session.id, newExpiresAt);
         }
-        timeRemainingSeconds = 300;
+        timeRemainingSeconds = Math.ceil(codWindowMs / 1000);
       } else {
         // Offline counter payment (CASH_COUNTER or CARD_COUNTER)
         updates += `, receiving_account_id = NULL, status = 'ACTIVE', queue_position = 0, expires_at = NULL`;
@@ -2111,7 +2112,7 @@ export function registerCheckoutRoutes(server, ctx) {
     // 7. Enqueue or activate new session if UPI
     let queueResult = { status: newSession.status, queuePosition: 0, expiresAt: null };
     if (newSession.receivingAccountId && (String(newSession.method).toUpperCase() === 'UPI' || !newSession.method)) {
-      queueResult = ctx.queueEngine.enqueueOrActivate(newSession.id, newSession.receivingAccountId, ctx.timingEngine?.activeDurationMs || 300000);
+      queueResult = ctx.queueEngine.enqueueOrActivate(newSession.id, newSession.receivingAccountId, ctx.timingEngine?.activeDurationMs || 600000);
       if (queueResult.expiresAt && ctx.timingEngine) {
         ctx.timingEngine.startActiveTimer(newSession.id, queueResult.expiresAt);
       }

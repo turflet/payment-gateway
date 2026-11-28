@@ -157,7 +157,7 @@ describe('COD Parallel Timer & UPI Queue Decoupling Suite', () => {
     await request(`/api/v1/checkout/${sessionBId}/cancel`, { method: 'POST' });
   });
 
-  test('COD session expires after parallel 5-minute window without touching UPI queue', async () => {
+  test('COD session expires after parallel 10-minute window without touching UPI queue', async () => {
     // 1. Create COD session
     const payCod = await request('/api/v1/payments', {
       method: 'POST',
@@ -178,7 +178,7 @@ describe('COD Parallel Timer & UPI Queue Decoupling Suite', () => {
       body: { method: 'COD' }
     });
     assert.equal(switchRes.status, 200);
-    assert.equal(switchRes.body.timeRemainingSeconds, 300);
+    assert.equal(switchRes.body.timeRemainingSeconds, 600);
 
     // Fast-forward / trigger expiration
     const expireRes = await request(`/api/v1/checkout/${codSessionId}/expire`, {

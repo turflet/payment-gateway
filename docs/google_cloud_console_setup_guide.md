@@ -7,7 +7,7 @@ This guide provides step-by-step instructions to configure your Google Cloud Con
 ## Architecture Overview
 
 YouPI PG introduces a **2-Level Verification Architecture**:
-- **Level 1 Verification**: First incoming credit match detected via **Direct Gmail API** or **Android SMS Gateway** in the 5-minute payment window. Starts a 5-second dual-verification grace window.
+- **Level 1 Verification**: First incoming credit match detected via **Direct Gmail API** or **Android SMS Gateway** in the 10-minute payment window. Starts a 5-second dual-verification grace window.
 - **Level 2 Verification**: Dual confirmation (`DUAL_VERIFIED_L2`) when **both** Gmail and SMS Gateway confirm the credit within 5 seconds.
 - **Aggressive 1-Second Polling**: Background poller checks both channels every 1 second without requiring an active browser tab or manual click.
 
@@ -127,7 +127,7 @@ Google OAuth access tokens expire after 1 hour, but a **Refresh Token** allows t
 ## Automated Polling & Verification Flow
 
 Once configured:
-1. When a customer initiates a UPI payment, the session enters the **5-minute payment window**.
+1. When a customer initiates a UPI payment, the session enters the **10-minute payment window**.
 2. YouPI PG launches aggressive **1-second background pollers** across both the **Android SMS Gateway** and the **Gmail Direct API**.
 3. When your bank sends an email credit alert (e.g. from HDFC, SBI, ICICI, Axis, Paytm, or Kotak):
    - The poller extracts the amount, payer VPA, and bank reference/UTR.

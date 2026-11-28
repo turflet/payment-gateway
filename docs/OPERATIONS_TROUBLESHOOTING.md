@@ -20,7 +20,7 @@ YOUPI PG's `RecoveryEngine` executes automatically whenever the Payment API proc
 ## 2. Late Observations & Merchant Reconciliation
 
 ### What is a Late Observation?
-A customer pays via their UPI app near the end of their 5-minute payment window, but their mobile network lags or they fail to click "Payment Done" before the timer expires. Later, a delayed bank notification arrives for that exact amount.
+A customer pays via their UPI app near the end of their 10-minute payment window, but their mobile network lags or they fail to click "Payment Done" before the timer expires. Later, a delayed bank notification arrives for that exact amount.
 
 ### Handling Policy
 - **Absolute Invariant:** The delayed observation is **never** attributed to a newer, different customer currently paying in the queue.
