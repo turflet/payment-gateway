@@ -32,6 +32,10 @@
   <script>
     const PAYMENT_ID = "{{PAYMENT_ID}}";
     const API_BASE = "{{API_BASE_URL}}";
+    // Payment window from PAYMENT_ACTIVE_WINDOW_MS (default 10 minutes).
+    const PAY_WINDOW_SEC = Number("{{PAY_WINDOW_SECONDS}}") || 600;
+    // "Payment done - check my payment" shows once the first minute has passed.
+    const CHECK_BUTTON_AT_SEC = Math.max(0, PAY_WINDOW_SEC - 60);
 
     let state = null;
     let countdownTimer = null;
@@ -1052,7 +1056,7 @@
     function runCountdown(seconds, onTick, onDone, targetExpiresAt) {
       const targetTime = targetExpiresAt
         ? new Date(targetExpiresAt).getTime()
-        : (_activeCountdownTargetTime || (Date.now() + (seconds || 300) * 1000));
+        : (_activeCountdownTargetTime || (Date.now() + (seconds || PAY_WINDOW_SEC) * 1000));
 
       if (countdownTimer && _activeCountdownTargetTime && Math.abs(_activeCountdownTargetTime - targetTime) <= 2500) {
         return;
@@ -1244,7 +1248,7 @@
           }
 
           if (method === 'COD') {
-            runCountdown(resData.timeRemainingSeconds || 300, sec => {
+            runCountdown(resData.timeRemainingSeconds || PAY_WINDOW_SEC, sec => {
               const el = document.getElementById('codTimerText');
               if (el) el.textContent = formatTime(sec);
             }, () => {
@@ -1256,7 +1260,7 @@
           } else if (method === 'UPI') {
             if (resData.status === 'ACTIVE') {
               loadQrSvg();
-              runCountdown(resData.timeRemainingSeconds || 300, sec => {
+              runCountdown(resData.timeRemainingSeconds || PAY_WINDOW_SEC, sec => {
                 const el = document.getElementById('activeTimerText');
                 if (el) el.textContent = formatTime(sec);
               }, () => {
@@ -2309,7 +2313,7 @@
           if (vCod) vCod.hidden = false;
           document.getElementById('ypgStickyFooter').style.display = 'none';
 
-          runCountdown(data.timeRemainingSeconds || 300, sec => {
+          runCountdown(data.timeRemainingSeconds || PAY_WINDOW_SEC, sec => {
             const el = document.getElementById('codTimerText');
             if (el) el.textContent = formatTime(sec);
           }, () => {
@@ -2334,7 +2338,7 @@
 
           const btnContinue = document.getElementById('btnContinuePayment');
 
-          const remainingSec = (data.timeRemainingSeconds !== undefined && data.timeRemainingSeconds !== null) ? Number(data.timeRemainingSeconds) : 300;
+          const remainingSec = (data.timeRemainingSeconds !== undefined && data.timeRemainingSeconds !== null) ? Number(data.timeRemainingSeconds) : PAY_WINDOW_SEC;
           const targetExpiry = data.expiresAt || new Date(Date.now() + remainingSec * 1000).toISOString();
 
           if (remainingSec <= 0 && data.status === 'ACTIVE') {
@@ -2344,10 +2348,10 @@
             return;
           }
 
-          // Initialize button hidden until 4:00 has elapsed
+          // Button stays hidden during the first minute of the payment window
           if (data.method === 'MANUAL_UPI' && btnContinue) {
             btnContinue.style.display = 'none';
-          } else if (btnContinue && remainingSec > 240) {
+          } else if (btnContinue && remainingSec > CHECK_BUTTON_AT_SEC) {
             btnContinue.style.display = 'none';
           } else if (btnContinue) {
             btnContinue.style.display = 'block';
@@ -2357,8 +2361,8 @@
             const tText = document.getElementById('activeTimerText');
             if (tText) tText.textContent = formatTime(sec);
 
-            // "Payment Done — Check My Payment" button appears after 4:00
-            if (sec <= 240 && btnContinue) {
+            // "Payment Done — Check My Payment" button appears after the first minute
+            if (sec <= CHECK_BUTTON_AT_SEC && btnContinue) {
               btnContinue.style.display = 'block';
             } else if (btnContinue) {
               btnContinue.style.display = 'none';

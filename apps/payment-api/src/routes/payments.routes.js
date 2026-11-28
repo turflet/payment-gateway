@@ -425,10 +425,10 @@ export function registerPaymentRoutes(server, ctx) {
     // Enqueue or Activate slot via QueueEngine ONLY when counter payment or explicitly requested by automated test runner
     let queueResult = { status: initialStatus, queuePosition: 0, expiresAt: null };
     if (!isCounterPayment && receivingAccountId && shouldActivateNow) {
-      const activeDurationMs = ctx.timingEngine ? ctx.timingEngine.activeDurationMs : 300000;
+      const activeDurationMs = ctx.timingEngine ? ctx.timingEngine.activeDurationMs : 600000;
       queueResult = ctx.queueEngine.enqueueOrActivate(session.id, receivingAccountId, activeDurationMs);
 
-      // If activated immediately, start Timer 1 (5 minutes)
+      // If activated immediately, start Timer 1 (payment window, default 10 minutes)
       if (queueResult.expiresAt) {
         ctx.timingEngine.startActiveTimer(session.id, queueResult.expiresAt);
       }

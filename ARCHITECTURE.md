@@ -55,7 +55,7 @@ Because standard P2P UPI transfers do not carry programmatic merchant transactio
 Timing is governed exclusively by the backend state machine, not client-side JavaScript:
 
 1. **5-Minute Payment Window (`ACTIVE`):** Countdown for the customer to scan the QR code and pay. Remains immutable across browser refreshes and server reboots.
-2. **30-Second Verification Window (`PROCESSING`):** Triggered when the customer clicks _"PAYMENT DONE — CHECK MY PAYMENT"_. Decoupled from the 5-minute timer to allow dedicated, high-frequency observer polling.
+2. **30-Second Verification Window (`PROCESSING`):** Triggered when the customer clicks _"PAYMENT DONE — CHECK MY PAYMENT"_. Decoupled from the 10-minute payment timer to allow dedicated, high-frequency observer polling.
 
 ### Invariant 4 — Pure Vector SVG QR Code Engine
 

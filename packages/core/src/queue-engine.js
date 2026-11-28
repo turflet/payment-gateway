@@ -12,7 +12,7 @@ export class QueueEngine {
    */
   constructor(options) {
     // Payment window used whenever a caller does not pass one (PAYMENT_ACTIVE_WINDOW_MS).
-    this.activeDurationMs = options.activeDurationMs || 300000;
+    this.activeDurationMs = options.activeDurationMs || 600000;
     // Verification window for a session that reached PROCESSING (PAYMENT_PROCESSING_WINDOW_MS).
     this.processingDurationMs = options.processingDurationMs || 30000;
     this.sessionRepo = options.sessionRepo;
